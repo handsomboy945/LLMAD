@@ -1,0 +1,249 @@
+{
+  "iteration": 4,
+  "old_prompt": "The first image is a normal reference sample. \nThe second image is a test image that may contain defects. Carefully compare the two images to determine if there are any anomalies in the test image.\n\n### Instructions:\n1. **Focus on Significant Deviations:** Identify anomalies based on significant deviations from the reference sample, such as unexpected substitutions, discoloration, contamination, or major structural changes. Acceptable natural variations (e.g., slight differences in fruit coloration, size, or arrangement) should be considered normal unless they exceed typical ranges.\n2. **Clarify Normal Variations:** Define typical ranges for natural variations (e.g., fruit coloration, size, and arrangement) and instruct the model to accept these as normal unless they exceed the defined thresholds. Provide examples of acceptable variations to help the model differentiate between normal and anomalous states.\n3. **Ensure Logical Consistency:** Pay attention to the overall composition and logical consistency of the contents. For example, if the reference sample includes nuts, the absence or substitution of nuts with another ingredient (e.g., dried banana slices) should be flagged as an anomaly.\n4. **Ignore Minor Differences:** Minor differences that do not impact the overall quality or safety of the product (e.g., slight scattering of granola or minor changes in fruit positioning) should be ignored.\n5. **Provide Examples of Common Anomalies:** Include examples of common anomalies, such as unexpected ingredient substitutions, discoloration, or contamination, to help the model better understand what to look for.\n6. **Output Format:** If no anomalies are found, respond with: `<answer>No</answer>`. If anomalies are found, respond with: `<answer>Yes</answer>` followed by a list of bounding boxes in JSON format:\n   ```json\n   [{\"bbox_2d\": [x1, y1, x2, y2], \"label\": \"anomaly_type\"}, ...]\n   ```\n\n### Example:\n```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [100, 150, 200, 250], \"label\": \"fruit_substitution\"}]\n```",
+  "new_prompt": "The first image is a normal reference sample. \nThe second image is a test image that may contain defects. Carefully compare the two images to determine if there are any anomalies in the test image.\n\n### Instructions:\n1. **Focus on Significant Deviations:** Identify anomalies based on significant deviations from the reference sample, such as unexpected substitutions, discoloration, contamination, or major structural changes. Acceptable natural variations (e.g., slight differences in fruit coloration, size, or arrangement) should be considered normal unless they exceed typical ranges.\n2. **Clarify Normal Variations:** Define typical ranges for natural variations (e.g., fruit coloration, size, and arrangement) and instruct the model to accept these as normal unless they exceed the defined thresholds. Provide examples of acceptable variations to help the model differentiate between normal and anomalous states.\n3. **Ensure Logical Consistency:** Pay attention to the overall composition and logical consistency of the contents. For example, if the reference sample includes nuts, the absence or substitution of nuts with another ingredient (e.g., dried banana slices) should be flagged as an anomaly.\n4. **Ignore Minor Differences:** Minor differences that do not impact the overall quality or safety of the product (e.g., slight scattering of granola or minor changes in fruit positioning) should be ignored.\n5. **Provide Examples of Common Anomalies:** Include examples of common anomalies, such as unexpected ingredient substitutions, discoloration, or contamination, to help the model better understand what to look for.\n6. **Output Format:** If no anomalies are found, respond with: `<answer>No</answer>`. If anomalies are found, respond with: `<answer>Yes</answer>` followed by a list of bounding boxes in JSON format:\n   ```json\n   [{\"bbox_2d\": [x1, y1, x2, y2], \"label\": \"anomaly_type\"}, ...]\n   ```\n\n### Example:\n```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [100, 150, 200, 250], \"label\": \"fruit_substitution\"}]\n```\n\n### Additional Guidance:\n- **Natural Variations:** Acceptable natural variations include slight differences in fruit coloration, size, and arrangement. For example, a slightly larger orange or a different shade of peach is acceptable.\n- **Ingredient Substitutions:** Unexpected substitutions, such as replacing almonds with dried banana slices, should be flagged as anomalies.\n- **Contamination:** Any visible contamination, such as foreign objects or discoloration, should be identified as an anomaly.\n- **Structural Changes:** Major structural changes, such as missing ingredients or incorrect proportions, should be flagged as anomalies.\n\n### Example of Expected Output:\n```xml\n<answer>No</answer>\n```\n\nor\n\n```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [100, 150, 200, 250], \"label\": \"fruit_substitution\"}]\n```",
+  "accuracy_before": {
+    "accuracy": 0.5236363636363637,
+    "precision": 0.7916666666666666,
+    "recall": 0.32947976878612717,
+    "f1": 0.46530612244897956,
+    "false_positive_rate": 0.14705882352941177,
+    "confusion_matrix": [
+      [
+        87,
+        15
+      ],
+      [
+        116,
+        57
+      ]
+    ]
+  },
+  "typical_errors": [
+    {
+      "class": "breakfast_box",
+      "defect_type": "good",
+      "image_name": "001.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\good\\001.png",
+      "ref_image": "breakfast_box/train/good/022.png",
+      "true_label": "normal",
+      "raw_response": "After carefully comparing the two images, the test image appears to be largely consistent with the reference sample. However, there is a noticeable difference in the contents of the right compartment:\n\n- The reference sample contains granola and dried banana slices.\n- The test image contains granola and a mix of dried banana slices and almonds.\n\nThis substitution of almonds for what appears to be another ingredient (possibly nuts or seeds) in the reference sample constitutes an anomaly.\n\n### Anomaly Detected:\n- **Label:** `ingredient_substitution`\n- **Bounding Box:** `[235, 60, 410, 410]` (the right compartment containing granola and mixed ingredients)\n\n### Final Answer:\n```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [235, 60, 410, 410], \"label\": \"ingredient_substitution\"}]\n```",
+      "think": "After carefully comparing the two images, the test image appears to be largely consistent with the reference sample. However, there is a noticeable difference in the contents of the right compartment:\n\n- The reference sample contains granola and dried banana slices.\n- The test image contains granola and a mix of dried banana slices and almonds.\n\nThis substitution of almonds for what appears to be another ingredient (possibly nuts or seeds) in the reference sample constitutes an anomaly.\n\n### Anomaly Detected:\n- **Label:** `ingredient_substitution`\n- **Bounding Box:** `[235, 60, 410, 410]` (the right compartment containing granola and mixed ingredients)\n\n### Final Answer:\n```xml",
+      "answer": "Yes",
+      "confidence": 1.0,
+      "predicted_label": "anomaly",
+      "predicted_bboxes": [
+        {
+          "bbox_2d": [
+            235.0,
+            60.0,
+            410.0,
+            410.0
+          ],
+          "label": "ingredient_substitution"
+        }
+      ],
+      "category": "false_positive",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/false_positive\\good001.png",
+      "visual_description": "Error Type: false_positive\n【False Positive Error】\nModel Confidence: 1.0\nVisualization: Only red border shows the predicted bbox and its label in a normal image\nGround Truth: This area is actually normal or does not contain the predicted anomaly\nProblem Analysis: The model incorrectly detected an anomaly in a normal area\n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "good",
+      "image_name": "003.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\good\\003.png",
+      "ref_image": "breakfast_box/train/good/167.png",
+      "true_label": "normal",
+      "raw_response": "```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [235, 310, 408, 470], \"label\": \"ingredient_substitution\"}]\n```",
+      "think": "```xml",
+      "answer": "Yes",
+      "confidence": 1.0,
+      "predicted_label": "anomaly",
+      "predicted_bboxes": [
+        {
+          "bbox_2d": [
+            235.0,
+            310.0,
+            408.0,
+            470.0
+          ],
+          "label": "ingredient_substitution"
+        }
+      ],
+      "category": "false_positive",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/false_positive\\good003.png",
+      "visual_description": "Error Type: false_positive\n【False Positive Error】\nModel Confidence: 1.0\nVisualization: Only red border shows the predicted bbox and its label in a normal image\nGround Truth: This area is actually normal or does not contain the predicted anomaly\nProblem Analysis: The model incorrectly detected an anomaly in a normal area\n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "good",
+      "image_name": "012.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\good\\012.png",
+      "ref_image": "breakfast_box/train/good/198.png",
+      "true_label": "normal",
+      "raw_response": "```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [230, 485, 379, 515], \"label\": \"ingredient_substitution\"}]\n```",
+      "think": "```xml",
+      "answer": "Yes",
+      "confidence": 1.0,
+      "predicted_label": "anomaly",
+      "predicted_bboxes": [
+        {
+          "bbox_2d": [
+            230.0,
+            485.0,
+            379.0,
+            515.0
+          ],
+          "label": "ingredient_substitution"
+        }
+      ],
+      "category": "false_positive",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/false_positive\\good012.png",
+      "visual_description": "Error Type: false_positive\n【False Positive Error】\nModel Confidence: 1.0\nVisualization: Only red border shows the predicted bbox and its label in a normal image\nGround Truth: This area is actually normal or does not contain the predicted anomaly\nProblem Analysis: The model incorrectly detected an anomaly in a normal area\n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "logical_anomalies",
+      "image_name": "000.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\logical_anomalies\\000.png",
+      "ref_image": "breakfast_box/train/good/139.png",
+      "true_label": "anomaly",
+      "raw_response": "```xml\n<answer>No</answer>\n```",
+      "think": "```xml",
+      "answer": "No",
+      "confidence": 0.0,
+      "predicted_label": "normal",
+      "predicted_bboxes": [],
+      "category": "false_negative",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/false_negative\\logical_anomalies000.png",
+      "visual_description": "Error Type: false_negative\n【False Negative Error】\nModel Confidence: 0.0\nVisualization: Real anomaly areas are marked with blue transparent mask and yellow borders.\nProblem Analysis: The model missed a real anomaly that exists in the image\n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "logical_anomalies",
+      "image_name": "001.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\logical_anomalies\\001.png",
+      "ref_image": "breakfast_box/train/good/334.png",
+      "true_label": "anomaly",
+      "raw_response": "```xml\n<answer>No</answer>\n```",
+      "think": "```xml",
+      "answer": "No",
+      "confidence": 0.0,
+      "predicted_label": "normal",
+      "predicted_bboxes": [],
+      "category": "false_negative",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/false_negative\\logical_anomalies001.png",
+      "visual_description": "Error Type: false_negative\n【False Negative Error】\nModel Confidence: 0.0\nVisualization: Real anomaly areas are marked with blue transparent mask and yellow borders.\nProblem Analysis: The model missed a real anomaly that exists in the image\n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "logical_anomalies",
+      "image_name": "002.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\logical_anomalies\\002.png",
+      "ref_image": "breakfast_box/train/good/334.png",
+      "true_label": "anomaly",
+      "raw_response": "```xml\n<answer>No</answer>\n```",
+      "think": "```xml",
+      "answer": "No",
+      "confidence": 0.0,
+      "predicted_label": "normal",
+      "predicted_bboxes": [],
+      "category": "false_negative",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/false_negative\\logical_anomalies002.png",
+      "visual_description": "Error Type: false_negative\n【False Negative Error】\nModel Confidence: 0.0\nVisualization: Real anomaly areas are marked with blue transparent mask and yellow borders.\nProblem Analysis: The model missed a real anomaly that exists in the image\n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "logical_anomalies",
+      "image_name": "006.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\logical_anomalies\\006.png",
+      "ref_image": "breakfast_box/train/good/067.png",
+      "true_label": "anomaly",
+      "raw_response": "```xml\n<answer>Yes</answer>\n[\n  {\n    \"bbox_2d\": [218, 57, 409, 360],\n    \"label\": \"ingredient_substitution\"\n  }\n]\n```",
+      "think": "```xml",
+      "answer": "Yes",
+      "confidence": 1.0,
+      "predicted_label": "anomaly",
+      "predicted_bboxes": [
+        {
+          "bbox_2d": [
+            218.0,
+            57.0,
+            409.0,
+            360.0
+          ],
+          "label": "ingredient_substitution"
+        }
+      ],
+      "category": "type_misclassification",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/type_misclassification\\logical_anomalies006.png",
+      "visual_description": "Error Type: type_misclassification\n【Classification Error】\nModel Confidence: 1.0\nProblem Analysis: The model misclassified logical_anomalies as \n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "logical_anomalies",
+      "image_name": "007.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\logical_anomalies\\007.png",
+      "ref_image": "breakfast_box/train/good/070.png",
+      "true_label": "anomaly",
+      "raw_response": "```xml\n<answer>Yes</answer>\n[{\"bbox_2d\": [218, 405, 396, 570], \"label\": \"fruit_substitution\"}]\n```\n```json\n[\n    {\n        \"bbox_2d\": [218, 405, 396, 570],\n        \"label\": \"fruit_substitution\"\n    }\n]\n```",
+      "think": "```xml",
+      "answer": "Yes",
+      "confidence": 1.0,
+      "predicted_label": "anomaly",
+      "predicted_bboxes": [
+        {
+          "bbox_2d": [
+            218.0,
+            405.0,
+            396.0,
+            570.0
+          ],
+          "label": "fruit_substitution"
+        },
+        {
+          "bbox_2d": [
+            218.0,
+            405.0,
+            396.0,
+            570.0
+          ],
+          "label": "fruit_substitution"
+        }
+      ],
+      "category": "type_misclassification",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/type_misclassification\\logical_anomalies007.png",
+      "visual_description": "Error Type: type_misclassification\n【Classification Error】\nModel Confidence: 1.0\nProblem Analysis: The model misclassified logical_anomalies as \n"
+    },
+    {
+      "class": "breakfast_box",
+      "defect_type": "logical_anomalies",
+      "image_name": "014.png",
+      "image_path": "./dataset/mvtec_loco_anomaly_detection\\breakfast_box\\test\\logical_anomalies\\014.png",
+      "ref_image": "breakfast_box/train/good/334.png",
+      "true_label": "anomaly",
+      "raw_response": "```xml\n<answer>Yes</answer>\n[\n  {\n    \"bbox_2d\": [240, 51, 403, 396],\n    \"label\": \"ingredient_substitution\"\n  }\n]\n```",
+      "think": "```xml",
+      "answer": "Yes",
+      "confidence": 1.0,
+      "predicted_label": "anomaly",
+      "predicted_bboxes": [
+        {
+          "bbox_2d": [
+            240.0,
+            51.0,
+            403.0,
+            396.0
+          ],
+          "label": "ingredient_substitution"
+        }
+      ],
+      "category": "type_misclassification",
+      "processed_image_path": "./temp_image/temp_processed_image/breakfast_box/type_misclassification\\logical_anomalies014.png",
+      "visual_description": "Error Type: type_misclassification\n【Classification Error】\nModel Confidence: 1.0\nProblem Analysis: The model misclassified logical_anomalies as \n"
+    }
+  ],
+  "optimizer_analysis": "The current prompt has several issues that contribute to the observed errors:\n\n  1. **False Positives (Case 1, 2, 3):**\n     - The model is overly sensitive to minor differences in ingredient composition, even when these differences are within acceptable natural variation ranges.\n     - There is insufficient guidance on what constitutes a \"significant deviation,\" leading the model to flag minor substitutions or additions as anomalies.\n\n  2. **False Negatives (Case 4, 5, 6):**\n     - The model fails to detect significant deviations, such as unexpected ingredient substitutions or major structural changes, indicating a lack of clarity in defining \"significant deviations.\"\n     - The prompt does not emphasize the importance of detecting logical inconsistencies, such as missing expected ingredients or incorrect proportions.\n\n  3. **Type Misclassifications (Case 7, 8, 9):**\n     - The model struggles to differentiate between acceptable natural variations and unacceptable anomalies, leading to misclassification of logical anomalies.\n     - There is no clear instruction on how to handle specific types of anomalies, such as ingredient substitutions or contamination.\n\n  4. **Output Format Clarity:**\n     - While the output format is specified, the examples provided may not be comprehensive enough to ensure the model understands the required JSON structure for bounding boxes and labels.\n\n  5. **Contextual Understanding:**\n     - The prompt does not sufficiently guide the model to consider the context of the reference sample when evaluating the test image, leading to over-sensitivity or under-detection of anomalies.",
+  "improvement_strategy": "To address these issues, the following strategies can be implemented:\n\n  1. **Clarify Natural Variations:**\n     - Explicitly define typical ranges for natural variations (e.g., fruit coloration, size, arrangement, and ingredient proportions) and instruct the model to accept these as normal unless they exceed the defined thresholds.\n     - Provide more detailed examples of acceptable variations to help the model differentiate between normal and anomalous states.\n\n  2. **Enhance Anomaly Detection Criteria:**\n     - Specify that anomalies should be identified based on significant deviations from the reference sample, such as unexpected substitutions, discoloration, contamination, or major structural changes.\n     - Encourage the model to focus on logical consistency and adherence to expected content, flagging any deviations that disrupt the expected composition.\n\n  3. **Improve Output Format Clarity:**\n     - Clearly state the required JSON format for the output, including the structure of bounding boxes and labels.\n     - Provide a more comprehensive example of the expected output to ensure the model understands the format requirements.\n\n  4. **Strengthen Contextual Understanding:**\n     - Include instructions to consider the context of the reference sample when evaluating the test image.\n     - Guide the model to prioritize detecting anomalies that deviate from the expected composition or logical consistency.\n\n  5. **Reduce Over-Sensitivity:**\n     - Instruct the model to ignore minor differences that do not impact the overall quality or safety of the product.\n     - Encourage the model to focus on significant deviations that are likely to indicate defects.\n\n  6. **Address Type Misclassifications:**\n     - Clarify the distinction between acceptable natural variations and unacceptable anomalies, ensuring the model correctly identifies and labels each type.\n     - Provide specific examples of anomalies that should be flagged, such as unexpected ingredient substitutions or contamination.\n\n  7. **Add Specific Instructions for Logical Consistency:**\n     - Emphasize the importance of checking for logical consistency, such as the presence of expected ingredients and their correct proportions.\n     - Encourage the model to flag any deviations from the expected composition as anomalies.\n\n  8. **Refine the Definition of \"Significant Deviations\":**\n     - Provide clearer guidance on what constitutes a \"significant deviation,\" such as unexpected substitutions, discoloration, or major structural changes.\n     - Encourage the model to focus on deviations that are likely to impact the quality or safety of the product.\n\n  9. **Include Examples of Common Anomalies:**\n     - Provide examples of common anomalies, such as unexpected ingredient substitutions, discoloration, or contamination, to help the model better understand what to look for.\n     - Encourage the model to use these examples as a reference when evaluating the test image.\n\n  10. **Simplify the Prompt:**\n     - Ensure the prompt is concise and easy to understand, avoiding unnecessary complexity that could confuse the model.\n     - Focus on the most critical aspects of the task, such as identifying significant deviations and maintaining logical consistency.",
+  "timestamp": 1759762991.2256036
+}

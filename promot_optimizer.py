@@ -6,16 +6,20 @@ import random
 from typing import List, Dict, Any, Tuple
 import dashscope
 from http import HTTPStatus
-from prompt_AD_test import prompt_AD_tester, resize_image, mask_to_bbox, calculate_iou
+from prompt_AD_test import prompt_AD_tester, resize_image, mask_to_bbox, calculate_iou, encode_image
 import cv2
 import numpy as np
+from earlystopping import EarlyStopping
+import sys
+from contextlib import contextmanager
 
 class PromptOptimizer:
-    def __init__(self, base_prompt: str, api_key: str):
+    def __init__(self, base_prompt, api_key, patience=5, min_improvement=0, save_path=""):
         self.base_prompt = base_prompt
         self.current_prompt = base_prompt
         self.optimization_history = []
         dashscope.api_key = api_key
+        self.early_stopping = EarlyStopping(patience, min_improvement, base_prompt, save_path)
         
     def classify_errors(self, error_results: List[Dict]) -> Dict[str, List[Dict]]:
         """将错误结果分类为不同的错误类型"""
@@ -72,6 +76,7 @@ class PromptOptimizer:
                 elif category == "false_negative":
                     errors = sorted(errors, key=lambda x: x.get("confidence", 0))  # 置信度低但漏检
                 elif category == "type_misclassification":
+                    continue # 这里先不处理分类错误，重点关注是否有故障
                     errors = sorted(errors, key=lambda x: x.get("confidence", 0))  # 置信度低但误分类
                 elif category == "format_violation":
                     random.shuffle(errors) # 打乱随机采样
@@ -212,50 +217,111 @@ class PromptOptimizer:
             import traceback
             traceback.print_exc()
 
-    def call_optimizer_llm(self, error_analysis: str, current_accuracy: float) -> str:
-        """调用改进者LLM分析错误并生成新的prompt"""
+    def call_optimizer_llm(self, typical_errors: List[Dict], current_accuracy: Dict, 
+                                    iteration: int) -> Dict[str, Any]:
+        """调用改进者LLM，包含实际的图片数据, 当前是每一轮优化都会开启一段新的对话, 后续可以考虑使用将不同次的对话使用同一段对话"""
         
-        system_prompt = """You are a professional prompt optimization expert. Your task is to improve prompts to enhance detection accuracy by analyzing the ADLLM's error cases in anomaly detection tasks.
-                        Please follow these steps for your thinking process:
-                        1. Carefully analyze the provided error cases and error type classifications
-                        2. Identify weak points in the current prompt that may lead to errors
-                        3. Propose specific prompt improvement strategies
-                        4. Generate a complete improved prompt
-                        5. The ADLLM will receive your new prompt, one normal and one test image, don't try to change the output format of ADLLM.
-                        Output format:
-                        <analysis>Your error analysis...</analysis>
-                        <improvement_strategy>Your improvement strategy...</improvement_strategy>
-                        <new_prompt>The complete improved prompt...</new_prompt>"""
-                                
-        user_prompt = f"""当前准确率: {current_accuracy}
-                        当前使用的prompt:
-                        {self.current_prompt}
-                        错误分析报告:
-                        {error_analysis}
-                        请分析以上错误案例，提出prompt改进方案，并生成新的prompt。"""
+        system_prompt = """You are a professional prompt optimization expert. 
+                        Your task is to improve prompts to enhance detection accuracy by 
+                        analyzing the ADLLM's error cases in anomaly detection tasks.
+                        Please analyze the provided images along with their error descriptions 
+                        to understand the specific detection failures and propose improvements."""
 
+        # 构建初始信息
+        accuracy_text = (
+        f"Accuracy: {current_accuracy['accuracy']:.2%}, "
+        f"Precision: {current_accuracy['precision']:.2%}, "
+        f"Recall: {current_accuracy['recall']:.2%}, "
+        f"F1: {current_accuracy['f1']:.2%}"
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": [
+                {"text": f"Current performance: {accuracy_text}\nCurrent prompt:\n{self.current_prompt}\nPlease analyze the images below and propose prompt improvements."},
+            ]}
+        ]
+
+        # 添加历史优化记录（如果有的话）
+        if self.optimization_history and len(self.optimization_history) > 0:
+            history_text = "\n## Previous Optimization History:\n"
+            for i, record in enumerate(self.optimization_history[-10:]):
+                previous_performance = record['accuracy_before']
+                accuracy_text = (
+                f"Accuracy: {previous_performance['accuracy']:.2%}, "
+                f"Precision: {previous_performance['precision']:.2%}, "
+                f"Recall: {previous_performance['recall']:.2%}, "
+                f"F1: {previous_performance['f1']:.2%}"
+        )
+                history_text += f"\n### Iteration {record['iteration']}:\n"
+                history_text += f"- Previous Performance: {accuracy_text}\n"
+                history_text += f"- Improvement Strategy: {record['improvement_strategy']}\n"
+                history_text += f"- Prompt Changes: {len(record['old_prompt'])} -> {len(record['new_prompt'])} characters\n"
+            messages[1]['content'].append({"text": history_text})
+        messages[1]['content'].append({
+            "text": "Please analyze the images below and propose prompt improvements."
+        })
+        
+        # 为每个典型错误添加图片
+        for i, error in enumerate(typical_errors):
+            if error['category'] == 'format_violation':
+                messages[1]['content'].append({
+                    "text": f"Case {i+1} - {error['category']}: {error['visual_description']}"
+                })
+            else:
+                try:
+                    image_data = encode_image(error['processed_image_path'])
+                    messages[1]['content'].extend([{
+                        "image": f"data:image/png;base64,{image_data}"},
+                        {"text": f"Case {i+1} - {error['category']}: {error['visual_description']}\n \
+                        ADLLM's Incorrect Reasoning Process:\n{error['think']}\n"
+                    }])
+                except Exception as e:
+                    print(f"无法读取图片 {error['processed_image_path']}: {e}")
+
+        # 添加格式化输出的要求
+        messages[1]['content'].append({
+            "text": (
+                "Please provide your analysis and improvement strategy in the following XML-like format:\n"
+                "<analysis>Detailed analysis of the errors and their causes...</analysis>\n"
+                "<improvement_strategy>Specific strategies to improve the prompt...</improvement_strategy>\n"
+                "<new_prompt>The complete revised prompt incorporating the improvements...</new_prompt>\n"
+                "CRITICAL CONSTRAINTS:\n"
+                "1. DO NOT modify ADLLM's output format structure\n"
+                "2. The <think> and <answer> tags must remain unchanged\n"
+                "3. Keep the exact JSON bounding box format: [{\"bbox_2d\": [x1, y1, x2, y2], \"label\": \"anomaly_type\"}, ...]\n"
+                "4. Maintain the same response options: \"Yes\", \"Possible\", \"Uncertain\", \"No\"\n"
+                "5. Preserve all existing output format requirements\n\n"
+                "Ensure the new prompt maintains clarity and conciseness while enhancing detection capabilities."
+            )
+        })
+        
         max_retries = 5
+
+        # 记录调用的messages，方便调试
+        with open('message.json', 'w', encoding='utf-8') as img_file:
+            json.dump(messages, img_file, ensure_ascii=False, indent=4)
+        
         for attempt in range(max_retries):
-            response = dashscope.Generation.call(
-                model='qwen-max',
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+            response = dashscope.MultiModalConversation.call(
+                model='qwen3-vl-plus', 
+                messages=messages,
                 top_p=0.9,
-                temperature=0.7
+                temperature=0,
+                seed=42
             )
             
             if response.status_code == HTTPStatus.OK:
-                text_content = response.output.choices[0].message.content
-                
-                # 解析响应
+                text_content = ""
+                for content in response.output.choices[0].message.content:
+                    if 'text' in content:
+                        text_content += content['text']
+
+                # 解析LLM回答
                 analysis_match = re.search(r'<analysis>(.*?)</analysis>', text_content, re.DOTALL)
                 strategy_match = re.search(r'<improvement_strategy>(.*?)</improvement_strategy>', text_content, re.DOTALL)
                 prompt_match = re.search(r'<new_prompt>(.*?)</new_prompt>', text_content, re.DOTALL)
-                
-                analysis = analysis_match.group(1).strip() if analysis_match else "无分析"
-                strategy = strategy_match.group(1).strip() if strategy_match else "无策略"
+                analysis = analysis_match.group(1).strip() if analysis_match else "No analysis"
+                strategy = strategy_match.group(1).strip() if strategy_match else "No strategy"
                 new_prompt = prompt_match.group(1).strip() if prompt_match else self.current_prompt
                 
                 return {
@@ -265,35 +331,17 @@ class PromptOptimizer:
                     "raw_response": text_content
                 }
             else:
-                print(f"优化器API调用失败: {response.code}")
-            time.sleep(5)  # 重试前等待
+                # 打印具体的API错误信息
+                print(f"API调用失败 - 状态码: {response.status_code}, 错误代码: {response.code}, 错误信息: {response.message}")
+                if hasattr(response, 'request_id'):
+                    print(f"请求ID: {response.request_id}")
         
         return {
-            "analysis": "API调用失败",
-            "strategy": "保持原prompt",
+            "analysis": "API call failed",
+            "strategy": "Keep original prompt",
             "new_prompt": self.current_prompt,
-            "raw_response": "API调用失败"
+            "raw_response": "API call failed"
         }
-    
-    def generate_error_analysis_report(self, error_categories: Dict, typical_errors: List[Dict]) -> str:
-        """生成详细的错误分析报告，或许能够帮助大模型分析错误"""
-
-        report = "错误类型统计:\n"
-        for category, errors in error_categories.items():
-            report += f"  {category}: {len(errors)} 个错误\n"
-        
-        report += "\n典型错误案例分析:\n"
-        report += "-" * 30 + "\n"
-        
-        for i, error in enumerate(typical_errors):
-            report += f"\n案例 {i+1}:\n"
-            report += f"  图像: {error['image_name']}\n"
-            report += f"  真实标签: {error['true_label']}\n"
-            report += f"  预测标签: {error['predicted_label']}\n"
-            report += f"  推理过程: {error['think'][:200]}...\n"
-            report += f"  模型回答: {error['answer'][:200]}...\n"
-        
-        return report
     
     def optimize_prompt(self, error_results: List[Dict], current_accuracy: Dict, iteration: int) -> Dict[str, Any]:
         """执行一次prompt优化迭代"""
@@ -304,9 +352,9 @@ class PromptOptimizer:
 
         typical_errors = self.select_typical_errors(error_categories)
         print(f"选择了 {len(typical_errors)} 个典型错误案例")
-        error_analysis = self.generate_error_analysis_report(error_categories, typical_errors)
         
-        optimization_result = self.call_optimizer_llm(error_analysis, current_accuracy)
+        optimization_result = self.call_optimizer_llm(typical_errors, current_accuracy, iteration)
+        print("调用优化者LLM完成")
         
         old_prompt = self.current_prompt
         self.current_prompt = optimization_result['new_prompt']
@@ -316,7 +364,7 @@ class PromptOptimizer:
             "old_prompt": old_prompt,
             "new_prompt": self.current_prompt,
             "accuracy_before": current_accuracy,
-            "error_analysis": error_analysis,
+            "typical_errors": typical_errors,
             "optimizer_analysis": optimization_result['analysis'],
             "improvement_strategy": optimization_result['strategy'],
             "timestamp": time.time()
@@ -332,12 +380,13 @@ class PromptOptimizer:
 def run_automated_prompt_optimization(
     base_prompt: str, 
     api_key: str, 
-    num_iterations: int = 5,
-    test_function: callable = None
+    num_iterations: int = 1000,
+    test_function: callable = None,
+    save_path: str = ""
 ):
     """运行自动化的prompt优化流程"""
     
-    optimizer = PromptOptimizer(base_prompt, api_key)
+    optimizer = PromptOptimizer(base_prompt, api_key, save_path=save_path)
     
     for iteration in range(1, num_iterations + 1):
         print(f"\n{'='*60}")
@@ -345,25 +394,36 @@ def run_automated_prompt_optimization(
         print(f"{'='*60}")
         
         # 使用当前prompt进行测试
-        # current_accuracy, error_results = test_function(optimizer.current_prompt)
-        # 这里是为了debug测试一下
-        current_accuracy = {
-                            "accuracy": 0.8235,
-                            "precision": 0.7812,
-                            "recall": 0.7143,
-                            "f1": 0.7463,
-                            "false_positive_rate": 0.1250,
-                            "confusion_matrix": [[45, 8], [12, 35]]
-                            }
-        error_results = json.load(open("LLMtry/72b-plus/mvtec/breakfast_box_detailed_results.json", 'r', encoding='cp1252'))['results']
-        
-        print(f"当前结果: {json.dumps(current_accuracy, indent=4)}")
-        print(f"错误样本数: {len(error_results)}")
-        
+        current_accuracy, error_results = test_function(optimizer.current_prompt)
+        stop_bool, reason = optimizer.early_stopping.check_early_stopping(current_accuracy, iteration, optimizer.current_prompt)
+        print(reason)
+        if stop_bool:
+            break
         # 如果没有错误（活在梦里），提前结束
         if len(error_results) == 0:
             print("没有错误样本，优化完成！")
             break
+
+        # 这里是为了debug测试一下
+        # current_accuracy = {
+        #                     "accuracy": 0.8235,
+        #                     "precision": 0.7812,
+        #                     "recall": 0.7143,
+        #                     "f1": 0.7463,
+        #                     "false_positive_rate": 0.1250,
+        #                     "confusion_matrix": [[45, 8], [12, 35]]
+        #                     }
+        # error_results = json.load(open("LLMtry/72b-plus/mvtec/breakfast_box_detailed_results.json", 'r', encoding='cp1252'))['results']
+        # stop_bool, reason = optimizer.early_stopping.check_early_stopping(current_accuracy, iteration, optimizer.current_prompt)
+        # if stop_bool:
+        #     break
+        # # 如果没有错误（活在梦里），提前结束
+        # if len(error_results) == 0:
+        #     print("没有错误样本，优化完成！")
+        #     break
+
+        print(f"当前结果: {json.dumps(current_accuracy, indent=4)}")
+        print(f"错误样本数: {len(error_results)}")
         
         # 执行prompt优化
         optimization_record = optimizer.optimize_prompt(error_results, current_accuracy, iteration)
@@ -385,9 +445,9 @@ def run_automated_prompt_optimization(
 
 def save_optimization_result(record: Dict, iteration: int):
     """保存优化结果"""
-    os.makedirs("./optimization_results", exist_ok=True)
+    os.makedirs(f"./log/{DATASET}/{SELECTED_CLASS}/optimization_results", exist_ok=True)
     
-    filename = f"./optimization_results/iteration_{iteration}.json"
+    filename = f"./log/{DATASET}/{SELECTED_CLASS}/optimization_results/iteration_{iteration}.json"
     with open(filename, 'w', encoding='utf-8') as f:
         json.dump(record, f, ensure_ascii=False, indent=2)
     
@@ -400,11 +460,45 @@ def generate_final_summary(history: List[Dict]) -> str:
     
     for record in history:
         summary += f"第 {record['iteration']} 轮优化:\n"
-        summary += f"  准确率: {record['accuracy_before']:.4f}\n"
-        summary += f"  主要改进: {record['improvement_strategy'][:100]}...\n"
+        summary += f"  准确率: {record['accuracy_before']}\n"
+        summary += f"  主要改进: {record['improvement_strategy']}\n"
         summary += f"  提示词变化: {len(record['old_prompt'])} -> {len(record['new_prompt'])} 字符\n\n"
     
     return summary
+
+# 将文件的print输入到log文件当中
+class TeeOutput:
+    def __init__(self, log_file):
+        self.terminal = sys.stdout
+        self.log_file = open(log_file, 'w', encoding='utf-8')
+    
+    def write(self, message):
+        self.terminal.write(message)
+        self.log_file.write(message)
+        self.log_file.flush() 
+    
+    def flush(self):
+        self.terminal.flush()
+        self.log_file.flush()
+    
+    def close(self):
+        self.log_file.close()
+
+def setup_logging(log_path: str):
+    '''设置日志记录, 同时输出到控制台和日志文件'''
+    os.makedirs(log_path, exist_ok=True)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_path, f"optimization_{timestamp}.log")
+    
+    tee = TeeOutput(log_file)
+    sys.stdout = tee
+    sys.stderr = tee
+    
+    print(f"日志文件: {log_file}")
+    print(f"开始时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 60)
+    
+    return tee  # 返回对象以便后续关闭
 
 if __name__ == "__main__":
     #全局配置
@@ -437,12 +531,17 @@ if __name__ == "__main__":
 
     # 这里传进去的时候是针对一个数据集的其中的一个类别，针对不同的类别需要不同的初始化
     prompt_tester = prompt_AD_tester(SELECTED_CLASS, BASE_DIR, DATASET_DIR, ANNOTATIONS_DIR, api_key)
+    log_path = f"./log/{DATASET}/{SELECTED_CLASS}/text"
+    png_log_path = f"./log/{DATASET}/{SELECTED_CLASS}/figures"
+    setup_logging(log_path) # 设置日志记录
     optimized_prompt, summary = run_automated_prompt_optimization(
         base_prompt=base_prompt,
         api_key=api_key,
-        num_iterations=3,
-        test_function=prompt_tester.prompt_AD
+        num_iterations=100,
+        test_function=prompt_tester.prompt_AD,
+        save_path=os.path.join(png_log_path, "record.png")
     )
+
     
     print("Prompt优化系统设计完成！")
     print("要使用此系统，你需要：")

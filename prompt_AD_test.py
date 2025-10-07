@@ -95,7 +95,9 @@ def get_text(base64_ref_image, base64_image, prompt):
                         ]
                     }
                 ],
-                top_p=0.95
+                top_p=0.9,
+                temperature=0,
+                seed=42
             )
             
             if response.status_code == HTTPStatus.OK:
